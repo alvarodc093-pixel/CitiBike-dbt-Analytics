@@ -1,0 +1,5 @@
+area_code,area_name,state,is_home_system
+JC,Jersey City,NJ,true
+HB,Hoboken,NJ,true
+NYC,New York City,NY,false
+OTRA,Otra / desconocida,,false

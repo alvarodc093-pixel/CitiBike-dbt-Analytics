@@ -1,0 +1,73 @@
+version: 2
+
+models:
+  - name: int_trips__classified
+    description: >
+      Todos los viajes de staging con su zona de origen y destino, la distancia en línea
+      recta y, si no es válido, el motivo (exclusion_reason). is_valid = exclusion_reason
+      es nulo.
+    columns:
+      - name: ride_id
+        data_tests: [unique, not_null]
+      - name: exclusion_reason
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['fuera_de_periodo', 'duracion_negativa', 'falso_arranque',
+                         'mas_de_24h', 'sin_estacion_origen', 'sin_estacion_destino']
+      - name: start_area_code
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('station_areas')
+                field: area_code
+      - name: end_area_code
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('station_areas')
+                field: area_code
+      - name: distance_km
+        description: Distancia en línea recta entre origen y destino. No es la ruta real.
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: 0
+                max_value: 40
+
+  - name: int_stations__unioned
+    description: Una fila por aparición de una estación (como origen o destino) en un viaje.
+
+unit_tests:
+  - name: clasifica_cada_motivo_de_exclusion
+    description: >
+      Cada viaje recibe el primer motivo que cumple, y un viaje normal queda válido.
+      También comprueba la zona: un viaje de Hoboken a Manhattan cruza de zona.
+    model: int_trips__classified
+    overrides:
+      vars:
+        periodo_inicio: "2026-01-01"
+        periodo_fin: "2026-02-01"
+        duracion_min_s: 60
+        duracion_max_s: 86400
+    given:
+      - input: ref('stg_citibike__trips')
+        rows:
+          - {ride_id: ok,        started_at: "2026-01-10 08:00:00", duration_s: 600,   start_station_id: JC001, end_station_id: JC002}
+          - {ride_id: diciembre, started_at: "2025-12-31 23:59:00", duration_s: 600,   start_station_id: JC001, end_station_id: JC002}
+          - {ride_id: negativo,  started_at: "2026-01-10 08:00:00", duration_s: -5,    start_station_id: JC001, end_station_id: JC002}
+          - {ride_id: falso,     started_at: "2026-01-10 08:00:00", duration_s: 59,    start_station_id: JC001, end_station_id: JC001}
+          - {ride_id: limite,    started_at: "2026-01-10 08:00:00", duration_s: 60,    start_station_id: JC001, end_station_id: JC001}
+          - {ride_id: perdida,   started_at: "2026-01-10 08:00:00", duration_s: 90000, start_station_id: JC001, end_station_id: JC002}
+          - {ride_id: sin_fin,   started_at: "2026-01-10 08:00:00", duration_s: 600,   start_station_id: JC001, end_station_id: null}
+          - {ride_id: a_nyc,     started_at: "2026-01-10 08:00:00", duration_s: 1500,  start_station_id: HB101, end_station_id: "5329.03"}
+    expect:
+      rows:
+        - {ride_id: ok,        exclusion_reason: null,                 is_valid: true,  is_round_trip: false, is_cross_area: false}
+        - {ride_id: diciembre, exclusion_reason: fuera_de_periodo,     is_valid: false, is_round_trip: false, is_cross_area: false}
+        - {ride_id: negativo,  exclusion_reason: duracion_negativa,    is_valid: false, is_round_trip: false, is_cross_area: false}
+        - {ride_id: falso,     exclusion_reason: falso_arranque,       is_valid: false, is_round_trip: true,  is_cross_area: false}
+        - {ride_id: limite,    exclusion_reason: null,                 is_valid: true,  is_round_trip: true,  is_cross_area: false}
+        - {ride_id: perdida,   exclusion_reason: mas_de_24h,           is_valid: false, is_round_trip: false, is_cross_area: false}
+        - {ride_id: sin_fin,   exclusion_reason: sin_estacion_destino, is_valid: false, is_round_trip: null,  is_cross_area: false}
+        - {ride_id: a_nyc,     exclusion_reason: null,                 is_valid: true,  is_round_trip: false, is_cross_area: true}

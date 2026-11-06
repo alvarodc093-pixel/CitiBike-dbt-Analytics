@@ -1,0 +1,129 @@
+version: 2
+
+models:
+  - name: fct_trips
+    description: >
+      Tabla de hechos con un registro por viaje válido (ver int_trips__classified para los
+      criterios). Incremental por fecha de inicio. Tiene contrato: si cambia el tipo o el
+      nombre de una columna, dbt falla al construirla en vez de romper los informes.
+    config:
+      contract:
+        enforced: true
+    columns:
+      - name: ride_id
+        description: "Identificador del viaje."
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests: [unique]
+      - name: trip_date
+        description: "Fecha de inicio del viaje (hora local de Nueva York)."
+        data_type: date
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_date')
+                field: date_day
+      - name: start_hour
+        description: "Hora de inicio (0-23)."
+        data_type: integer
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 23}
+      - name: started_at
+        description: "Momento de inicio."
+        data_type: timestamp
+      - name: ended_at
+        description: "Momento de fin."
+        data_type: timestamp
+      - name: duration_s
+        description: "Duración en segundos, entre 60 s y 24 h."
+        data_type: bigint
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 60, max_value: 86400}
+      - name: duration_min
+        description: "Duración en minutos."
+        data_type: double
+      - name: rideable_type
+        description: "classic_bike o electric_bike."
+        data_type: varchar
+      - name: rider_type
+        description: "member (abono anual) o casual (pase de viaje o de día)."
+        data_type: varchar
+      - name: start_station_id
+        description: "Estación de origen (siempre de Jersey City o Hoboken)."
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_stations')
+                field: station_id
+      - name: end_station_id
+        description: "Estación de destino. Puede ser de Nueva York si el viaje cruza el río."
+        data_type: varchar
+        constraints: [{type: not_null}]
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('dim_stations')
+                field: station_id
+      - name: start_area_code
+        description: "Zona de origen: JC, HB o NYC."
+        data_type: varchar
+      - name: end_area_code
+        description: "Zona de destino: JC, HB o NYC."
+        data_type: varchar
+      - name: distance_km
+        description: "Distancia en línea recta entre origen y destino (no la ruta real)."
+        data_type: double
+      - name: is_round_trip
+        description: "Empieza y termina en la misma estación."
+        data_type: boolean
+      - name: is_cross_area
+        description: "Origen y destino en zonas distintas (p. ej. Jersey City -> Hoboken)."
+        data_type: boolean
+
+  - name: dim_stations
+    description: Una fila por estación (de origen o de destino), con su nombre más reciente y su posición.
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+      - name: station_name
+        data_tests: [not_null]
+      - name: area_code
+        data_tests:
+          - relationships:
+              arguments:
+                to: ref('station_areas')
+                field: area_code
+      - name: lat
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 40.5, max_value: 41.0}
+      - name: lng
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: -74.3, max_value: -73.7}
+      - name: n_names
+        description: Cuántos nombres distintos ha tenido la estación (más de 1 = se renombró).
+
+  - name: dim_date
+    description: Un día por fila en el periodo analizado, con tipo de día, festivos y meteorología.
+    columns:
+      - name: date_day
+        data_tests: [unique, not_null, is_complete_date_spine]
+      - name: day_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['laborable', 'fin de semana', 'festivo']
+      - name: weather_category
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['seco', 'lluvia', 'lluvia fuerte', 'nieve']
+      - name: precipitation_mm
+        description: Sin nulos = la meteorología cubre todos los días del periodo.
+        data_tests: [not_null]
