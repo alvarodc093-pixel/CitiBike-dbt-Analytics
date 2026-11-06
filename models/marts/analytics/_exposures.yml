@@ -1,0 +1,21 @@
+version: 2
+
+exposures:
+  - name: informe_readme
+    label: Informe del README (gráficos y hallazgos)
+    type: analysis
+    maturity: high
+    url: https://github.com/alvarodc093-pixel/CitiBike-dbt-Analytics#hallazgos
+    description: >
+      graficos.py lee las tablas de analytics y genera los gráficos del README.
+      Si cambia una de estas tablas, dbt muestra en el linaje que este informe depende de ella.
+    depends_on:
+      - ref('mart_daily_demand')
+      - ref('mart_station_rebalancing')
+      - ref('mart_station_daily_balance')
+      - ref('mart_station_hourly_profile')
+      - ref('mart_weather_impact')
+      - ref('mart_od_flows')
+      - ref('mart_data_quality')
+    owner:
+      name: Álvaro

@@ -1,0 +1,77 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+env:
+  DBT_SEND_ANONYMOUS_USAGE_STATS: "false"
+  PYTHONIOENCODING: utf-8
+
+jobs:
+  dbt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+          cache: pip
+      - run: pip install -r requirements.txt
+
+      # Los CSV de un mes cerrado no cambian: se guardan en caché para no
+      # descargarlos de S3 en cada push.
+      - name: Caché de los datos de origen
+        uses: actions/cache@v6
+        with:
+          path: data/raw
+          key: raw-${{ hashFiles('descargar_datos.py') }}
+
+      - name: Descargar datos (Citi Bike + Open-Meteo)
+        run: python descargar_datos.py
+
+      - name: dbt parse (sintaxis, refs y YAML)
+        run: dbt parse
+
+      - name: dbt build (modelos, unit test y 61 tests de datos)
+        run: dbt build
+
+      - name: La carga incremental da lo mismo que la completa
+        run: |
+          # 1) Carga completa solo hasta agosto.
+          dbt run -s +fct_trips --full-refresh --vars '{periodo_fin: "2026-09-01"}' -q
+          # 2) Carga incremental con el periodo completo. "+fct_trips" reconstruye también
+          #    las vistas de las que depende; si no, seguirían filtrando hasta agosto.
+          dbt run -s +fct_trips -q
+          python comprobar_incremental.py
+
+      - name: Gráficos del README
+        run: python graficos.py
+
+      - name: Documentación estática de dbt
+        run: |
+          dbt docs generate --static
+          mkdir -p site
+          cp target/static_index.html site/index.html
+
+      - uses: actions/upload-pages-artifact@v5
+        if: github.ref == 'refs/heads/main'
+        with:
+          path: site
+
+  # Publica la documentación de dbt (con el grafo de linaje) en GitHub Pages.
+  # Requiere activar una vez: Settings -> Pages -> Source: GitHub Actions.
+  docs:
+    needs: dbt
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v5

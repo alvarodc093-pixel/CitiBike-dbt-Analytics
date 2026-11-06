@@ -1,0 +1,46 @@
+name: citibike_analytics
+version: "1.0.0"
+config-version: 2
+profile: citibike_analytics
+
+model-paths: ["models"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+test-paths: ["tests"]
+analysis-paths: ["analyses"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+
+vars:
+  # Periodo analizado. Los ficheros mensuales traen algún viaje del mes anterior
+  # (los que cruzan la medianoche del día 1), así que se filtra por fecha de inicio.
+  periodo_inicio: "2025-10-01"
+  periodo_fin: "2026-10-01"     # exclusivo
+  # Mismo criterio que Citi Bike: los viajes de menos de 60 s son falsos arranques.
+  duracion_min_s: 60
+  # Más de 24 h: bici perdida, robada o mal anclada.
+  duracion_max_s: 86400
+  # Una estación "se vacía" o "se llena" un día si pierde o gana al menos estas bicis.
+  umbral_desequilibrio: 10
+
+models:
+  citibike_analytics:
+    staging:
+      +materialized: view
+      +schema: staging
+    intermediate:
+      +materialized: view
+      +schema: intermediate
+    marts:
+      +materialized: table
+      core:
+        +schema: core
+      analytics:
+        +schema: analytics
+
+seeds:
+  citibike_analytics:
+    +schema: seeds
+
+data_tests:
+  +store_failures: false

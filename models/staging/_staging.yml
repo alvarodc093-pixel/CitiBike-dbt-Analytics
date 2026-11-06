@@ -1,0 +1,49 @@
+version: 2
+
+models:
+  - name: stg_citibike__trips
+    description: >
+      Un registro por viaje (ride_id único). Renombra columnas, convierte textos vacíos
+      en nulos, elimina los duplicados entre ficheros mensuales y calcula la duración.
+    columns:
+      - name: ride_id
+        description: Identificador del viaje.
+        data_tests: [unique, not_null]
+      - name: rideable_type
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['classic_bike', 'electric_bike']
+      - name: rider_type
+        description: "member = abonado anual; casual = pase de viaje o de día."
+        data_tests:
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['member', 'casual']
+      - name: started_at
+        data_tests: [not_null]
+      - name: ended_at
+        data_tests: [not_null]
+      - name: duration_s
+        description: Segundos entre inicio y fin. Puede ser negativa o enorme; se filtra después.
+      - name: source_file_month
+        description: Mes (AAAAMM) del fichero del que procede la fila.
+
+  - name: stg_openmeteo__weather_daily
+    description: Un registro por día con temperatura, lluvia, nieve y viento en Jersey City.
+    columns:
+      - name: weather_date
+        data_tests: [unique, not_null]
+      - name: precipitation_mm
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments:
+                min_value: 0
+      - name: temp_max_c
+        data_tests:
+          - accepted_range:
+              arguments:
+                min_value: -30
+                max_value: 50

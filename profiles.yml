@@ -1,0 +1,8 @@
+# dbt busca primero profiles.yml en la carpeta desde la que se ejecuta.
+citibike_analytics:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "data/citibike.duckdb"
+      threads: 4

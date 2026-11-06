@@ -1,0 +1,31 @@
+version: 2
+
+sources:
+  - name: citibike
+    description: >
+      Viajes del sistema Citi Bike de Jersey City y Hoboken, publicados cada mes por
+      Lyft en https://s3.amazonaws.com/tripdata/. Un CSV por mes, descargado con
+      descargar_datos.py.
+    tables:
+      - name: trips
+        description: Un registro por viaje, tal y como lo publica Citi Bike (sin limpiar).
+        config:
+          meta:
+            # Todo se lee como texto y los tipos se fijan en staging. Si se dejara al
+            # detector de tipos de DuckDB, un id de estación de Nueva York ("5329.03")
+            # o un mes con formatos distintos podría cambiar el tipo entre ficheros.
+            external_location: >-
+              read_csv('data/raw/trips/*.csv', union_by_name = true, filename = true,
+                       all_varchar = true)
+        columns:
+          - name: ride_id
+            data_tests:
+              - not_null
+
+  - name: openmeteo
+    description: Meteorología diaria de Jersey City (API histórica de Open-Meteo, CC BY 4.0).
+    tables:
+      - name: weather_daily
+        config:
+          meta:
+            external_location: "read_csv('data/raw/weather/jersey_city_daily.csv')"
