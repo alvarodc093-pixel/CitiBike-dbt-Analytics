@@ -7,9 +7,12 @@ exposures:
     maturity: high
     url: https://github.com/alvarodc093-pixel/CitiBike-dbt-Analytics#hallazgos
     description: >
-      graficos.py lee las tablas de analytics y genera los gráficos del README.
+      graficos.py lee las tablas de analytics (y fct_trips con dim_date para la demanda
+      horaria del sistema) y genera los gráficos del README.
       Si cambia una de estas tablas, dbt muestra en el linaje que este informe depende de ella.
     depends_on:
+      - ref('fct_trips')
+      - ref('dim_date')
       - ref('mart_daily_demand')
       - ref('mart_station_rebalancing')
       - ref('mart_station_daily_balance')
