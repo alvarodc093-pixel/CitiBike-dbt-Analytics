@@ -19,7 +19,7 @@
 
 | # | Pregunta | Respuesta corta | Modelo |
 |---|---|---|---|
-| 1 | ¿Cuándo se usa la bici? | Los laborables tienen dos picos de trabajo: **8:00 (243 viajes/h)** y **17:00 (342 viajes/h)**. El fin de semana no hay picos: una meseta de ocio de 11 a 18 h. Un laborable medio tiene 2.814 viajes y un día de fin de semana, 2.323. | [`mart_station_hourly_profile`](models/marts/analytics/mart_station_hourly_profile.sql) |
+| 1 | ¿Cuándo se usa la bici? | Los laborables tienen dos picos de trabajo: **8:00 (228 viajes/h)** y **17:00 (312 viajes/h)**. El fin de semana no hay picos: una meseta de ocio de 11 a 18 h. Un laborable medio tiene 2.814 viajes y un día de fin de semana, 2.323. | [`fct_trips`](models/marts/core/fct_trips.sql) + [`dim_date`](models/marts/core/dim_date.sql) |
 | 2 | ¿Dónde se acumulan las bicis? | El balance del día engaña: casi todas las estaciones parecen "equilibradas" porque lo que entra por la mañana sale por la tarde. Por horas, **Grove St PATH gana 61 bicis de 6 a 10 h y pierde 54 de 16 a 20 h**. Lo mismo, a menor escala, en otras 8 estaciones, la mayoría junto a Hoboken Terminal, Exchange Pl o Journal Square. Entre las 9 suman **~240 bicis** cada mañana. | [`mart_station_rebalancing`](models/marts/analytics/mart_station_rebalancing.sql) |
 | 3 | ¿Cuánto frena la meteorología? | Frente a un día seco del mismo mes y tipo de día: lluvia ligera **−8 %**, nieve **−25 %** y lluvia fuerte (≥ 10 mm) **−35 %**. El 23 de febrero de 2026 un temporal cerró el sistema: **0 viajes**. | [`mart_weather_impact`](models/marts/analytics/mart_weather_impact.sql) |
 | 4 | ¿Cuánto pesa la estacionalidad? | De **907 viajes/día en febrero a 3.569 en verano**: casi 4 veces más. | [`mart_daily_demand`](models/marts/analytics/mart_daily_demand.sql) |

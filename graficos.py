@@ -52,9 +52,22 @@ def guardar(fig, nombre: str) -> None:
 
 
 def demanda_horaria(con) -> None:
+    # Media del sistema: viajes de cada hora / días de ese tipo en el periodo.
+    # No se suman las medias de mart_station_hourly_profile: cada estación se promedia
+    # sobre los días en que existía, y sumarlas inflaría la demanda de los primeros
+    # meses con estaciones que aún no estaban abiertas (~8 % de más).
     df = sql(con, """
-        select hour, day_group, sum(avg_departures) as viajes
-        from analytics.mart_station_hourly_profile
+        with dias as (
+            select date_day,
+                   case when day_type = 'laborable' then 'laborable'
+                        else 'fin de semana o festivo' end as day_group
+            from core.dim_date
+        ),
+        n_dias as (select day_group, count(*) as n from dias group by all)
+        select f.start_hour as hour, d.day_group, count(*) / any_value(n.n) as viajes
+        from core.fct_trips as f
+        join dias as d on d.date_day = f.trip_date
+        join n_dias as n using (day_group)
         group by all order by hour
     """)
     fig, ax = plt.subplots(figsize=(10, 4.2))

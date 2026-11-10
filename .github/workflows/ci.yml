@@ -62,9 +62,12 @@ jobs:
 
   # Publica la documentación de dbt (con el grafo de linaje) en GitHub Pages.
   # Requiere activar una vez: Settings -> Pages -> Source: GitHub Actions.
+  # continue-on-error: si Pages no está activado (o falla el despliegue), el CI sigue
+  # en verde, porque lo que valida el proyecto es el job dbt; el aviso queda en el job.
   docs:
     needs: dbt
     if: github.ref == 'refs/heads/main'
+    continue-on-error: true
     runs-on: ubuntu-latest
     permissions:
       pages: write

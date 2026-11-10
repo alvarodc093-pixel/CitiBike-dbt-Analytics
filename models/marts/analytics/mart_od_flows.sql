@@ -17,7 +17,7 @@ select
     round(count(*) filter (where t.rider_type = 'member') / count(*), 4)
                                                      as share_member,
     round(median(t.duration_min), 2)                 as median_duration_min,
-    round(any_value(t.distance_km), 3)               as approx_distance_km,
+    round(median(t.distance_km), 3)                  as approx_distance_km,
     rank() over (order by count(*) desc)             as flow_rank
 from trips as t
 left join {{ ref('dim_stations') }} as s on s.station_id = t.start_station_id
