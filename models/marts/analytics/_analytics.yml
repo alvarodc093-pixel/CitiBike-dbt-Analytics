@@ -2,18 +2,52 @@ version: 2
 
 models:
   - name: mart_daily_demand
-    description: Un día por fila con los viajes por tipo de usuario y de bici, la meteorología y el tipo de día.
+    description: Un día por fila con los viajes por tipo de usuario y de bici, la meteorología y el tipo de día. Los días sin viajes salen con 0.
     columns:
       - name: date_day
         data_tests: [unique, not_null, is_complete_date_spine]
+      - name: year_month
+      - name: iso_weekday
+      - name: weekday_name
+      - name: season
+      - name: day_type
+        description: laborable, fin de semana o festivo.
+      - name: holiday_name
+      - name: temp_max_c
+      - name: precipitation_mm
+      - name: snowfall_cm
+      - name: weather_category
+        description: Ver dim_date.weather_category.
+      - name: follows_heavy_snow
+        description: Ver dim_date.follows_heavy_snow.
       - name: trips
+        description: Viajes válidos que empiezan ese día.
         data_tests:
+          - not_null
           - accepted_range:
               arguments: {min_value: 0}
+      - name: trips_member
+        description: Viajes de abonados.
+      - name: trips_casual
+        description: Viajes de usuarios ocasionales.
+      - name: trips_electric
+        description: Viajes en bici eléctrica.
+      - name: trips_cross_area
+        description: Viajes entre zonas (Jersey City, Hoboken, Nueva York).
       - name: share_electric
+        description: Proporción de viajes en bici eléctrica (nula si no hubo viajes).
         data_tests:
           - accepted_range:
               arguments: {min_value: 0, max_value: 1}
+      - name: share_member
+        description: Proporción de viajes de abonados (nula si no hubo viajes).
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+      - name: median_duration_min
+        description: Mediana de la duración (min).
+      - name: median_distance_km
+        description: Mediana de la distancia en línea recta, sin contar los viajes de ida y vuelta.
 
   - name: mart_station_daily_balance
     description: >
@@ -31,41 +65,132 @@ models:
               arguments:
                 to: ref('dim_stations')
                 field: station_id
+      - name: station_name
+      - name: area_code
+      - name: trip_date
+        description: Día. Las salidas cuentan el día en que empieza el viaje; las llegadas, el día en que termina.
+      - name: day_type
+      - name: departures
+        description: Viajes que salen de la estación ese día.
+      - name: arrivals
+        description: Viajes que llegan a la estación ese día.
+      - name: net_flow
+        description: arrivals - departures. Negativo = pierde bicis.
 
   - name: mart_station_rebalancing
     description: >
-      Una fila por estación propia con su desequilibrio medio y el porcentaje de días en
-      que pierde o gana 10 o más bicis (umbral configurable con la variable umbral_desequilibrio).
+      Una fila por estación propia con su desequilibrio medio, el de las horas punta de
+      un laborable y el porcentaje de días en que pierde o gana 10 o más bicis (umbral
+      configurable con la variable umbral_desequilibrio).
     columns:
       - name: station_id
         data_tests: [unique, not_null]
+      - name: station_name
+      - name: area_code
+      - name: active_days
+        description: Días con al menos una salida o llegada (base de las medias diarias).
+      - name: departures
+        description: Salidas en todo el periodo.
+      - name: arrivals
+        description: Llegadas en todo el periodo.
+      - name: net_flow
+        description: Llegadas - salidas en todo el periodo.
+      - name: avg_daily_net_flow
+        description: Flujo neto medio por día activo.
+      - name: avg_net_flow_weekday
+        description: Flujo neto medio por laborable activo.
+      - name: avg_abs_net_flow
+        description: Media del desequilibrio en valor absoluto (cuánto se descompensa un día típico, en cualquier sentido).
+      - name: share_days_draining
+        description: Proporción de días activos en que pierde umbral_desequilibrio bicis o más.
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 1}
+      - name: share_days_filling
+        description: Proporción de días activos en que gana umbral_desequilibrio bicis o más.
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 1}
       - name: daily_balance_profile
         description: Desequilibrio en el conjunto del día (media de 3 o más bicis perdidas o ganadas).
         data_tests:
           - accepted_values:
               arguments:
                 values: ['se vacía', 'se llena', 'equilibrada']
+      - name: capacity
+        description: Anclajes (ver dim_stations.capacity). Nulo si la estación ya no existe.
       - name: am_peak_net_flow
         description: Bicis ganadas (+) o perdidas (-) de media entre las 6:00 y las 9:59 de un laborable.
+      - name: pm_peak_net_flow
+        description: Bicis ganadas (+) o perdidas (-) de media entre las 16:00 y las 19:59 de un laborable.
+      - name: am_peak_vs_capacity
+        description: >
+          am_peak_net_flow / capacity. Por encima de 1, la estación gana en la punta más
+          bicis de las que le caben aunque empiece vacía.
       - name: peak_profile
         data_tests:
           - accepted_values:
               arguments:
                 values: ['se llena por la mañana', 'se vacía por la mañana', 'estable en punta']
-      - name: share_days_draining
+
+  - name: mart_weekday_peak_load
+    description: >
+      Un laborable por fila con las bicis que acumulan en la punta de mañana (6:00-9:59)
+      las estaciones que "se llenan por la mañana". Se calcula día a día para no contar
+      dos veces una estación reubicada (HB106 -> HB107).
+    columns:
+      - name: date_day
+        data_tests: [unique, not_null]
+      - name: weekday_name
+      - name: weather_category
+      - name: filling_stations_active
+        description: Estaciones de las que se llenan por la mañana con movimiento en la punta ese día.
         data_tests:
           - accepted_range:
-              arguments: {min_value: 0, max_value: 1}
+              arguments: {min_value: 0, max_value: 20}
+      - name: am_bikes_accumulated
+        description: Llegadas - salidas de 6:00 a 9:59 en esas estaciones (bicis que hay que retirar).
+        data_tests: [not_null]
+      - name: am_bikes_accumulated_all_stations
+        description: >
+          Suma de lo que ganan en la punta todas las estaciones propias que ganan bicis ese
+          día. Es una cota superior del reparto, porque incluye estaciones con +1 o +2 por azar.
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 0}
 
   - name: mart_weather_impact
     description: >
       Efecto de la meteorología en la demanda. Cada día se compara con la media de los
       días secos del mismo mes y tipo de día, para no confundir "llueve" con "es invierno".
+      Los días secos que siguen a una nevada fuerte forman su propia categoría y no
+      entran en la referencia.
     columns:
       - name: weather_category
-        data_tests: [unique, not_null]
+        description: Categoría de dim_date, más "seco tras nevada".
+        data_tests:
+          - unique
+          - not_null
+          - accepted_values:
+              arguments:
+                values: ['seco', 'seco tras nevada', 'lluvia', 'lluvia fuerte', 'nieve']
+      - name: n_days
+        description: Días de la categoría con una referencia de al menos 3 días secos comparables.
+      - name: avg_trips
+        description: Viajes medios por día de la categoría.
+      - name: avg_dry_baseline
+        description: Viajes medios de los días secos comparables (mismo mes y tipo de día).
       - name: avg_pct_vs_dry
         description: Variación media frente a un día seco comparable (-0,30 = 30 % menos viajes).
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: -1, max_value: 1}
+      - name: median_pct_vs_dry
+        description: Mediana de la misma variación (menos sensible a días extremos como el 23/02, con 0 viajes).
+      - name: ci95_low
+        description: Límite inferior del intervalo de confianza del 95 % de avg_pct_vs_dry.
+      - name: ci95_high
+        description: Límite superior del intervalo de confianza del 95 % de avg_pct_vs_dry.
 
   - name: mart_station_hourly_profile
     description: >
@@ -77,10 +202,33 @@ models:
           arguments:
             columns: ['station_id', 'day_group', 'hour']
     columns:
+      - name: station_id
+        data_tests: [not_null]
+      - name: station_name
+      - name: area_code
+      - name: day_group
+        description: laborable, o fin de semana o festivo.
+        data_tests:
+          - accepted_values:
+              arguments:
+                values: ['laborable', 'fin de semana o festivo']
       - name: hour
+        description: Hora local (0-23). Salidas por hora de inicio y llegadas por hora de fin.
         data_tests:
           - accepted_range:
               arguments: {min_value: 0, max_value: 23}
+      - name: n_days
+        description: Días de ese tipo entre la primera y la última aparición de la estación.
+      - name: departures
+        description: Salidas totales en esa hora y tipo de día.
+      - name: arrivals
+        description: Llegadas totales en esa hora y tipo de día.
+      - name: avg_departures
+        description: Salidas medias por día.
+      - name: avg_arrivals
+        description: Llegadas medias por día.
+      - name: avg_net_flow
+        description: Llegadas - salidas medias por día (+ = gana bicis en esa hora).
 
   - name: mart_od_flows
     description: Una fila por par origen-destino con el número de viajes y su ranking.
@@ -89,10 +237,24 @@ models:
           arguments:
             columns: ['start_station_id', 'end_station_id']
     columns:
+      - name: start_station_id
+      - name: start_station_name
+      - name: end_station_id
+      - name: end_station_name
+      - name: start_area_code
+      - name: end_area_code
       - name: trips
         data_tests:
           - accepted_range:
               arguments: {min_value: 1}
+      - name: share_member
+        description: Proporción de viajes de abonados en ese trayecto.
+      - name: median_duration_min
+        description: Mediana de la duración del trayecto (min).
+      - name: approx_distance_km
+        description: Mediana de la distancia en línea recta (0 si es de ida y vuelta).
+      - name: flow_rank
+        description: Puesto del trayecto por número de viajes (1 = el más repetido; empates comparten puesto).
 
   - name: mart_data_quality
     description: >
@@ -100,7 +262,28 @@ models:
       excluidos por cada motivo. raw_rows = duplicados + válidos + todas las exclusiones.
     columns:
       - name: source_file_month
+        description: Mes del fichero (AAAAMM).
         data_tests: [unique, not_null]
+      - name: raw_rows
+        description: Filas del CSV tal cual.
+      - name: duplicates_removed
+        description: Filas repetidas en otro fichero mensual (viajes que cruzan el fin de mes).
+      - name: deduplicated_rows
+        description: Filas tras eliminar duplicados.
+      - name: valid_trips
+        description: Viajes que pasan a fct_trips.
+      - name: excl_out_of_period
+        description: Viajes que empiezan fuera del periodo analizado.
+      - name: excl_negative_duration
+        description: Duración negativa una vez corregido el cambio de hora (salvaguarda; hoy 0).
+      - name: excl_false_start
+        description: Menos de 60 s (falso arranque; Citi Bike ya los quita, hoy 0).
+      - name: excl_over_24h
+        description: Más de 24 h (bici perdida, robada o mal anclada).
+      - name: excl_no_start_station
+        description: Sin estación de origen.
+      - name: excl_no_end_station
+        description: Sin estación de destino (casi siempre bici eléctrica dejada fuera de un anclaje).
       - name: share_valid
         description: Si baja del 95 % el test lo marca como aviso, para revisar ese fichero.
         data_tests:

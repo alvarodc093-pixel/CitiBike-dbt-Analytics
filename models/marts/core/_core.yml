@@ -25,19 +25,19 @@ models:
                 to: ref('dim_date')
                 field: date_day
       - name: start_hour
-        description: "Hora de inicio (0-23)."
+        description: "Hora local de inicio (0-23)."
         data_type: integer
         data_tests:
           - accepted_range:
               arguments: {min_value: 0, max_value: 23}
       - name: started_at
-        description: "Momento de inicio."
+        description: "Momento de inicio, en hora local de Nueva York y sin zona horaria (como lo publica Citi Bike)."
         data_type: timestamp
       - name: ended_at
-        description: "Momento de fin."
+        description: "Momento de fin, en hora local de Nueva York y sin zona horaria."
         data_type: timestamp
       - name: duration_s
-        description: "Duración en segundos, entre 60 s y 24 h."
+        description: "Duración en segundos, entre 60 s y 24 h, calculada en UTC (respeta el cambio de hora)."
         data_type: bigint
         data_tests:
           - accepted_range:
@@ -86,44 +86,102 @@ models:
         data_type: boolean
 
   - name: dim_stations
-    description: Una fila por estación (de origen o de destino), con su nombre más reciente y su posición.
+    description: >
+      Una fila por estación (de origen o de destino), con su nombre más reciente, su
+      posición y, para las estaciones propias que siguen abiertas, sus anclajes.
+      Ojo: HB106 (River St & Newark St) se reubicó como HB107 (Hudson Pl & Hoboken
+      Terminal), a 116 m, el 31/07/2026. Son dos filas que nunca coexisten.
     columns:
       - name: station_id
+        description: Id de Citi Bike. JCxxx = Jersey City, HBxxx = Hoboken, numérico = Nueva York.
         data_tests: [unique, not_null]
       - name: station_name
+        description: Nombre más reciente con el que aparece.
         data_tests: [not_null]
       - name: area_code
+        description: Zona (JC, HB, NYC u OTRA), deducida del id.
         data_tests:
           - relationships:
               arguments:
                 to: ref('station_areas')
                 field: area_code
+      - name: area_name
+        description: Nombre de la zona (seed station_areas).
+      - name: is_home_system
+        description: La estación es del sistema de Jersey City o Hoboken (no de Nueva York).
       - name: lat
+        description: Latitud (mediana de todos sus viajes).
         data_tests:
           - accepted_range:
               arguments: {min_value: 40.5, max_value: 41.0}
       - name: lng
+        description: Longitud (mediana de todos sus viajes).
         data_tests:
           - accepted_range:
               arguments: {min_value: -74.3, max_value: -73.7}
+      - name: capacity
+        description: >
+          Anclajes según el feed GBFS (seed station_capacity). Es una foto de hoy, no del
+          periodo: nulo en las estaciones que ya no existen y en las de Nueva York.
+        data_tests:
+          - accepted_range:
+              arguments: {min_value: 1, max_value: 100}
+      - name: capacity_snapshot_date
+        description: Fecha de la foto de GBFS de la que sale la capacidad.
       - name: n_names
         description: Cuántos nombres distintos ha tenido la estación (más de 1 = se renombró).
+      - name: first_seen_date
+        description: Primer día con un viaje que sale o llega a la estación (aproxima su apertura).
+      - name: last_seen_date
+        description: Último día con un viaje (aproxima su cierre o reubicación).
+      - name: n_appearances
+        description: Veces que aparece como origen o destino, válidas o no.
 
   - name: dim_date
     description: Un día por fila en el periodo analizado, con tipo de día, festivos y meteorología.
     columns:
       - name: date_day
         data_tests: [unique, not_null, is_complete_date_spine]
+      - name: year
+      - name: month
+      - name: year_month
+        description: AAAA-MM.
+      - name: iso_weekday
+        description: 1 = lunes ... 7 = domingo.
+      - name: weekday_name
+      - name: season
+        description: Estación meteorológica (invierno = diciembre a febrero).
+      - name: holiday_name
+        description: Festivo federal de EE. UU. (seed us_holidays); nulo si no es festivo.
       - name: day_type
+        description: laborable, fin de semana o festivo (un festivo en fin de semana cuenta como festivo).
         data_tests:
+          - not_null
           - accepted_values:
               arguments:
                 values: ['laborable', 'fin de semana', 'festivo']
+      - name: temp_max_c
+        description: Temperatura máxima (°C).
+      - name: temp_min_c
+        description: Temperatura mínima (°C).
+      - name: precipitation_mm
+        description: Precipitación total, lluvia y nieve fundida (mm). Sin nulos = la meteorología cubre todos los días.
+        data_tests: [not_null]
+      - name: snowfall_cm
+        description: Nieve caída (cm).
+      - name: wind_max_kmh
+        description: Racha máxima de viento a 10 m (km/h).
       - name: weather_category
+        description: >
+          nieve (>= 1 cm), lluvia fuerte (>= 10 mm), lluvia (>= 1 mm) o seco, en ese orden.
+          Umbrales configurables en dbt_project.yml.
         data_tests:
+          - not_null
           - accepted_values:
               arguments:
                 values: ['seco', 'lluvia', 'lluvia fuerte', 'nieve']
-      - name: precipitation_mm
-        description: Sin nulos = la meteorología cubre todos los días del periodo.
+      - name: follows_heavy_snow
+        description: >
+          Alguno de los 3 días anteriores tuvo una nevada fuerte (>= 5 cm). Aunque ese día
+          no nieve, las calles pueden seguir cubiertas.
         data_tests: [not_null]

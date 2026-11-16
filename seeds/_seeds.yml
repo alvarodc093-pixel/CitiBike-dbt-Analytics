@@ -1,0 +1,34 @@
+version: 2
+
+seeds:
+  - name: station_areas
+    description: Zonas del sistema. is_home_system = la zona es de Citi Bike Jersey City / Hoboken.
+    config:
+      column_types: {area_code: varchar, area_name: varchar, state: varchar, is_home_system: boolean}
+    columns:
+      - name: area_code
+        data_tests: [unique, not_null]
+
+  - name: us_holidays
+    description: Festivos federales de EE. UU. del periodo (incluido el 3 de julio, festivo observado del 4).
+    config:
+      column_types: {holiday_date: date, holiday_name: varchar}
+    columns:
+      - name: holiday_date
+        data_tests: [unique, not_null]
+
+  - name: station_capacity
+    description: >
+      Anclajes de cada estación de Jersey City y Hoboken según el feed GBFS de Citi Bike.
+      Es una foto (snapshot_date), no un histórico: se regenera con
+      `python descargar_datos.py --capacidad`.
+    config:
+      column_types: {station_id: varchar, capacity: integer, snapshot_date: date}
+    columns:
+      - name: station_id
+        data_tests: [unique, not_null]
+      - name: capacity
+        data_tests:
+          - not_null
+          - accepted_range:
+              arguments: {min_value: 0, max_value: 100}

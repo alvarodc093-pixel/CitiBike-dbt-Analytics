@@ -36,6 +36,7 @@ select
     d.precipitation_mm,
     d.snowfall_cm,
     d.weather_category,
+    d.follows_heavy_snow,
     coalesce(t.trips, 0)                                          as trips,
     coalesce(t.trips_member, 0)                                   as trips_member,
     coalesce(t.trips_casual, 0)                                   as trips_casual,

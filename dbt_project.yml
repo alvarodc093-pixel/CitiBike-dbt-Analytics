@@ -1,6 +1,7 @@
 name: citibike_analytics
 version: "1.0.0"
 config-version: 2
+require-dbt-version: [">=1.10.0", "<2.0.0"]   # unit tests y "arguments:" en los tests
 profile: citibike_analytics
 
 model-paths: ["models"]
@@ -22,6 +23,14 @@ vars:
   duracion_max_s: 86400
   # Una estación "se vacía" o "se llena" un día si pierde o gana al menos estas bicis.
   umbral_desequilibrio: 10
+  # Meteorología. Open-Meteo modela trazas de nieve de 0,07 cm que nadie nota en la calle:
+  # un día cuenta como "nieve" a partir de 1 cm. Una nevada de 5 cm o más deja la calle
+  # impracticable varios días aunque ya no nieve: esos días no sirven de referencia "seca".
+  umbral_nieve_cm: 1
+  umbral_nevada_fuerte_cm: 5
+  dias_tras_nevada: 3
+  umbral_lluvia_mm: 1
+  umbral_lluvia_fuerte_mm: 10
 
 models:
   citibike_analytics:

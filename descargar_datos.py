@@ -7,13 +7,20 @@
 
 Los ficheros se guardan en data/raw/ y no se versionan en Git.
 
+Aparte, con --capacidad, guarda en seeds/station_capacity.csv los anclajes de cada
+estación de Jersey City y Hoboken según el feed GBFS de Citi Bike. Es una foto del día
+en que se ejecuta (el feed no tiene histórico), así que se versiona como seed con su
+fecha y solo se refresca a propósito.
+
 Uso:
     python descargar_datos.py                 # periodo por defecto
     python descargar_datos.py 2025-10 2026-09 # periodo a medida (AAAA-MM)
+    python descargar_datos.py --capacidad     # refresca la foto de capacidad (seed)
 """
 
 from __future__ import annotations
 
+import csv
 import io
 import sys
 import time
@@ -27,6 +34,8 @@ RAW = Path(__file__).parent / "data" / "raw"
 BUCKET = "https://s3.amazonaws.com/tripdata"
 INICIO, FIN = "2025-10", "2026-09"
 LAT, LON = 40.7178, -74.0431  # Jersey City
+GBFS = "https://gbfs.citibikenyc.com/gbfs/en/station_information.json"
+SEED_CAPACIDAD = Path(__file__).parent / "seeds" / "station_capacity.csv"
 
 
 def _get(url: str, **kwargs) -> requests.Response:
@@ -102,7 +111,27 @@ def descargar_meteo(inicio: str, fin: str) -> None:
     print(f"  {destino.name} ({len(lineas) - cabecera - 1} días)")
 
 
+def descargar_capacidad() -> None:
+    """Anclajes por estación (JC y HB) del feed GBFS, con la fecha de la foto."""
+    datos = _get(GBFS).json()
+    foto = date.fromtimestamp(datos["last_updated"]).isoformat()
+    filas = sorted(
+        (e["short_name"], int(e["capacity"]))
+        for e in datos["data"]["stations"]
+        if e.get("short_name", "").startswith(("JC", "HB"))
+    )
+    with SEED_CAPACIDAD.open("w", newline="", encoding="utf-8") as f:
+        w = csv.writer(f)
+        w.writerow(["station_id", "capacity", "snapshot_date"])
+        w.writerows((sid, cap, foto) for sid, cap in filas)
+    print(f"  {SEED_CAPACIDAD.name}: {len(filas)} estaciones (foto del {foto})")
+
+
 def main() -> None:
+    if sys.argv[1:] == ["--capacidad"]:
+        print("Capacidad de las estaciones (GBFS)")
+        descargar_capacidad()
+        return
     inicio, fin = (sys.argv[1], sys.argv[2]) if len(sys.argv) == 3 else (INICIO, FIN)
     print(f"Viajes de Citi Bike JC {inicio} -> {fin}")
     for mes in meses(inicio, fin):

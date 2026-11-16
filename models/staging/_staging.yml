@@ -47,3 +47,42 @@ models:
               arguments:
                 min_value: -30
                 max_value: 50
+
+unit_tests:
+  - name: duracion_con_cambio_de_hora
+    description: >
+      La duración se calcula en UTC y corrige la hora repetida de noviembre. Un viaje
+      normal mide lo mismo; uno que cruza el adelanto de marzo no suma 1 h; uno que
+      termina en la segunda pasada de la 1:00 de noviembre no sale negativo. Y un viaje
+      que aparece en dos ficheros mensuales se queda una sola vez.
+    model: stg_citibike__trips
+    given:
+      # Formato sql: la fuente es un read_csv externo y dbt no puede leer sus columnas.
+      - input: source('citibike', 'trips')
+        format: sql
+        rows: |
+          select 'normal' as ride_id, '2026-01-10 08:00:00' as started_at, '2026-01-10 08:10:00' as ended_at,
+                 'data/raw/trips/JC-202601-citibike-tripdata.csv' as filename, 
+                 null::varchar as rideable_type, null::varchar as member_casual, null::varchar as start_station_id, null::varchar as start_station_name, null::varchar as end_station_id, null::varchar as end_station_name, null::varchar as start_lat, null::varchar as start_lng, null::varchar as end_lat, null::varchar as end_lng
+          union all
+          select 'marzo' as ride_id, '2026-03-08 01:55:00' as started_at, '2026-03-08 03:05:00' as ended_at,
+                 'data/raw/trips/JC-202603-citibike-tripdata.csv' as filename, 
+                 null::varchar as rideable_type, null::varchar as member_casual, null::varchar as start_station_id, null::varchar as start_station_name, null::varchar as end_station_id, null::varchar as end_station_name, null::varchar as start_lat, null::varchar as start_lng, null::varchar as end_lat, null::varchar as end_lng
+          union all
+          select 'noviembre' as ride_id, '2025-11-02 01:57:55' as started_at, '2025-11-02 01:03:17' as ended_at,
+                 'data/raw/trips/JC-202511-citibike-tripdata.csv' as filename, 
+                 null::varchar as rideable_type, null::varchar as member_casual, null::varchar as start_station_id, null::varchar as start_station_name, null::varchar as end_station_id, null::varchar as end_station_name, null::varchar as start_lat, null::varchar as start_lng, null::varchar as end_lat, null::varchar as end_lng
+          union all
+          select 'repetido' as ride_id, '2026-04-30 23:56:00' as started_at, '2026-05-01 00:06:00' as ended_at,
+                 'data/raw/trips/JC-202604-citibike-tripdata.csv' as filename, 
+                 null::varchar as rideable_type, null::varchar as member_casual, null::varchar as start_station_id, null::varchar as start_station_name, null::varchar as end_station_id, null::varchar as end_station_name, null::varchar as start_lat, null::varchar as start_lng, null::varchar as end_lat, null::varchar as end_lng
+          union all
+          select 'repetido' as ride_id, '2026-04-30 23:56:00' as started_at, '2026-05-01 00:06:00' as ended_at,
+                 'data/raw/trips/JC-202605-citibike-tripdata.csv' as filename, 
+                 null::varchar as rideable_type, null::varchar as member_casual, null::varchar as start_station_id, null::varchar as start_station_name, null::varchar as end_station_id, null::varchar as end_station_name, null::varchar as start_lat, null::varchar as start_lng, null::varchar as end_lat, null::varchar as end_lng
+    expect:
+      rows:
+        - {ride_id: normal,    duration_s: 600,  source_file_month: "202601"}
+        - {ride_id: marzo,     duration_s: 600,  source_file_month: "202603"}
+        - {ride_id: noviembre, duration_s: 322,  source_file_month: "202511"}
+        - {ride_id: repetido,  duration_s: 600,  source_file_month: "202604"}

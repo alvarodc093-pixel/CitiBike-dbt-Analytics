@@ -19,6 +19,20 @@ weather as (
 
 ),
 
+-- La meteorología de los días previos: hace falta para saber si un día "seco" llega
+-- justo después de una nevada fuerte (calles y carriles bici todavía cubiertos).
+weather_context as (
+
+    select
+        *,
+        bool_or(snowfall_cm >= {{ var('umbral_nevada_fuerte_cm') }}) over (
+            order by weather_date
+            rows between {{ var('dias_tras_nevada') }} preceding and 1 preceding
+        )                                                as follows_heavy_snow
+    from weather
+
+),
+
 holidays as (
 
     select cast(holiday_date as date) as holiday_date, holiday_name
@@ -55,11 +69,12 @@ select
     w.snowfall_cm,
     w.wind_max_kmh,
     case
-        when w.snowfall_cm > 0             then 'nieve'
-        when w.precipitation_mm >= 10      then 'lluvia fuerte'
-        when w.precipitation_mm >= 1       then 'lluvia'
+        when w.snowfall_cm >= {{ var('umbral_nieve_cm') }}              then 'nieve'
+        when w.precipitation_mm >= {{ var('umbral_lluvia_fuerte_mm') }} then 'lluvia fuerte'
+        when w.precipitation_mm >= {{ var('umbral_lluvia_mm') }}        then 'lluvia'
         else 'seco'
-    end                                                  as weather_category
+    end                                                  as weather_category,
+    coalesce(w.follows_heavy_snow, false)                as follows_heavy_snow
 from spine as s
-left join weather as w on w.weather_date = s.date_day
+left join weather_context as w on w.weather_date = s.date_day
 left join holidays as h on h.holiday_date = s.date_day

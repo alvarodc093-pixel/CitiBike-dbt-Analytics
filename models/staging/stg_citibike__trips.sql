@@ -46,5 +46,7 @@ deduplicated as (
 
 select
     *,
-    datediff('second', started_at, ended_at)       as duration_s
+    -- Con el cambio de hora: sin él, 7 viajes del 2 de noviembre salían con duración
+    -- negativa y los que cruzan la noche del adelanto de marzo, con 1 h de más.
+    {{ duration_seconds('started_at', 'ended_at') }}  as duration_s
 from deduplicated

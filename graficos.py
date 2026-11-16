@@ -107,12 +107,20 @@ def perfil_grove(con) -> None:
 
 
 def estaciones_punta(con) -> None:
+    # Las estaciones que cerraron antes del final del periodo llevan la fecha en la
+    # etiqueta: HB106 se reubicó como HB107 y no deben leerse como dos puntos a la vez.
     df = sql(con, """
-        (select station_name, am_peak_net_flow from analytics.mart_station_rebalancing
-         order by am_peak_net_flow desc limit 9)
+        with r as (
+            select r.am_peak_net_flow,
+                   r.station_name || case when s.last_seen_date < (select max(date_day) - 7 from core.dim_date)
+                                          then ' (hasta ' || strftime(s.last_seen_date, '%d/%m') || ')'
+                                          else '' end as station_name
+            from analytics.mart_station_rebalancing as r
+            join core.dim_stations as s using (station_id)
+        )
+        (select * from r order by am_peak_net_flow desc limit 9)
         union all
-        (select station_name, am_peak_net_flow from analytics.mart_station_rebalancing
-         order by am_peak_net_flow asc limit 6)
+        (select * from r order by am_peak_net_flow asc limit 6)
     """).sort_values("am_peak_net_flow")
     fig, ax = plt.subplots(figsize=(10, 5.6))
     colores = [AZUL if v >= 0 else NARANJA for v in df.am_peak_net_flow]
@@ -137,11 +145,11 @@ def demanda_diaria(con) -> None:
     fig, ax = plt.subplots(figsize=(10, 4.2))
     ax.scatter(df.date_day, df.trips, s=9, color=GRIS, label="viajes del día", zorder=2)
     nieve = df[df.weather_category == "nieve"]
-    ax.scatter(nieve.date_day, nieve.trips, s=26, color=NARANJA, label="día con nieve", zorder=3)
+    ax.scatter(nieve.date_day, nieve.trips, s=26, color=NARANJA, label="día con nieve (≥ 1 cm)", zorder=3)
     ax.plot(df.date_day, df.media_7d, color=AZUL, lw=2.2, label="media móvil 7 días", zorder=4)
     cero = df[df.trips == 0]
     for _, r in cero.iterrows():
-        ax.annotate(f"{r.date_day:%d/%m}: temporal de nieve,\nsistema cerrado (0 viajes)",
+        ax.annotate(f"{r.date_day:%d/%m}: temporal de nieve (14 cm),\nni un viaje registrado",
                     (r.date_day, 0), xytext=(r.date_day + pd.Timedelta(days=35), 450),
                     color=TINTA, arrowprops={"arrowstyle": "->", "color": TINTA})
     ax.set_ylabel("Viajes por día")
@@ -152,18 +160,23 @@ def demanda_diaria(con) -> None:
 
 
 def efecto_meteo(con) -> None:
-    orden = ["lluvia", "lluvia fuerte", "nieve"]
+    orden = ["lluvia", "lluvia fuerte", "nieve", "seco tras nevada"]
     df = sql(con, "select * from analytics.mart_weather_impact").set_index("weather_category")
     df = df.loc[orden]
-    fig, ax = plt.subplots(figsize=(8, 3.6))
-    ax.bar(df.index, df.avg_pct_vs_dry * 100, color=NARANJA, width=0.55)
+    fig, ax = plt.subplots(figsize=(9, 4))
+    media = df.avg_pct_vs_dry * 100
+    # Barra de error = intervalo de confianza del 95 %: con 12 días de nieve, la cifra
+    # exacta importa menos que el orden de magnitud.
+    err = [media - df.ci95_low * 100, df.ci95_high * 100 - media]
+    ax.bar(df.index, media, color=NARANJA, width=0.55)
+    ax.errorbar(df.index, media, yerr=err, fmt="none", ecolor=TINTA, elinewidth=1, capsize=4)
     ax.axhline(0, color=TINTA, lw=0.8)
-    for x, (v, n) in enumerate(zip(df.avg_pct_vs_dry, df.n_days)):
-        ax.text(x, v * 100 - 1.5, f"{v:+.0%}\n({n} días)", ha="center", va="top", color=TINTA)
+    for x, (v, lo, n) in enumerate(zip(df.avg_pct_vs_dry, df.ci95_low, df.n_days)):
+        ax.text(x, lo * 100 - 2, f"{v:+.0%}\n({n} días)", ha="center", va="top", color=TINTA)
     ax.set_ylabel("% frente a un día seco comparable")
-    ax.set_ylim(df.avg_pct_vs_dry.min() * 100 - 14, 3)
+    ax.set_ylim(df.ci95_low.min() * 100 - 18, 3)
     ax.grid(axis="x", visible=False)
-    ax.set_title("La lluvia ligera apenas frena la demanda; la fuerte, un tercio")
+    ax.set_title("La lluvia ligera apenas frena la demanda; la nieve, a la mitad, y sigue días después")
     guardar(fig, "efecto_meteo.png")
 
 

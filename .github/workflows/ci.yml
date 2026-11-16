@@ -34,7 +34,7 @@ jobs:
       - name: dbt parse (sintaxis, refs y YAML)
         run: dbt parse
 
-      - name: dbt build (modelos, unit test y 61 tests de datos)
+      - name: dbt build (modelos, unit tests y tests de datos)
         run: dbt build
 
       - name: La carga incremental da lo mismo que la completa

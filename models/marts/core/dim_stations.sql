@@ -1,6 +1,7 @@
 -- Una fila por estación. El nombre es el último con el que aparece (por si se ha
 -- renombrado) y la posición es la mediana de las coordenadas de todos sus viajes,
--- que es robusta frente a lecturas GPS erróneas.
+-- que es robusta frente a lecturas GPS erróneas. La capacidad (anclajes) viene de una
+-- foto del feed GBFS (seed station_capacity); las estaciones ya cerradas no la tienen.
 
 with appearances as (
 
@@ -40,11 +41,14 @@ select
     a.is_home_system,
     s.lat,
     s.lng,
+    c.capacity,
+    c.snapshot_date                          as capacity_snapshot_date,
     s.n_names,
     s.first_seen_date,
     s.last_seen_date,
     s.n_appearances
 from stats as s
 left join latest_name as n using (station_id)
+left join {{ ref('station_capacity') }} as c using (station_id)
 left join {{ ref('station_areas') }} as a
     on a.area_code = {{ station_area_code('s.station_id') }}

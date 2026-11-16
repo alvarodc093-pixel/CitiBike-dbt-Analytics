@@ -15,6 +15,7 @@ exposures:
       - ref('dim_date')
       - ref('mart_daily_demand')
       - ref('mart_station_rebalancing')
+      - ref('mart_weekday_peak_load')
       - ref('mart_station_daily_balance')
       - ref('mart_station_hourly_profile')
       - ref('mart_weather_impact')

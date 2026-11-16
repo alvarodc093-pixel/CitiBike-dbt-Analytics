@@ -58,8 +58,12 @@ summary as (
 
 select
     s.*,
+    st.capacity,
     round(p.am_peak_net_flow, 1)                                    as am_peak_net_flow,
     round(p.pm_peak_net_flow, 1)                                    as pm_peak_net_flow,
+    -- Bicis que gana en la punta de mañana por cada anclaje. Por encima de 1, ni
+    -- empezando vacía le caben: hay que retirar bicis en plena punta.
+    round(p.am_peak_net_flow / nullif(st.capacity, 0), 2)           as am_peak_vs_capacity,
     case
         when p.am_peak_net_flow >=  {{ var('umbral_desequilibrio', 10) }} then 'se llena por la mañana'
         when p.am_peak_net_flow <= -{{ var('umbral_desequilibrio', 10) }} then 'se vacía por la mañana'
@@ -67,3 +71,4 @@ select
     end                                                             as peak_profile
 from summary as s
 left join peaks as p using (station_id)
+left join {{ ref('dim_stations') }} as st using (station_id)
