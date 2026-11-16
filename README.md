@@ -1,26 +1,26 @@
-# Citi Bike Jersey City — pipeline de datos con dbt
+# Citi Bike Jersey City: pipeline de datos con dbt
 
-**Pipeline de *analytics engineering* con dbt + DuckDB que transforma 972.000 viajes reales de bici compartida y la meteorología diaria en un modelo en estrella probado, documentado y listo para analizar.**
+Pipeline de analytics engineering (dbt + DuckDB) sobre 972.000 viajes reales de bici compartida y la meteorología diaria: modelo en estrella, 85 tests, carga incremental verificada en CI y documentación publicada.
 
-### 🔗 [Ver la documentación interactiva y el grafo de linaje (demo)](https://alvarodc093-pixel.github.io/CitiBike-dbt-Analytics/)
+**Documentación y linaje:** [demo en GitHub Pages](https://alvarodc093-pixel.github.io/CitiBike-dbt-Analytics/)
 
-[![CI](https://github.com/alvarodc093-pixel/CitiBike-dbt-Analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/alvarodc093-pixel/CitiBike-dbt-Analytics/actions/workflows/ci.yml) ![dbt](https://img.shields.io/badge/dbt-1.12-FF694B?style=flat-square&logo=dbt&logoColor=white) ![DuckDB](https://img.shields.io/badge/DuckDB-2.0-FFF000?style=flat-square&logo=duckdb&logoColor=black) ![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&logo=python&logoColor=white) ![Tests](https://img.shields.io/badge/tests%20dbt-85-2ea44f?style=flat-square)
+[![CI](https://github.com/alvarodc093-pixel/CitiBike-dbt-Analytics/actions/workflows/ci.yml/badge.svg)](https://github.com/alvarodc093-pixel/CitiBike-dbt-Analytics/actions/workflows/ci.yml) ![dbt](https://img.shields.io/badge/dbt-1.12-FF694B?style=flat-square&logo=dbt&logoColor=white) ![DuckDB](https://img.shields.io/badge/DuckDB-2.0-FFF000?style=flat-square&logo=duckdb&logoColor=black) ![Python](https://img.shields.io/badge/Python-3.13-3776AB?style=flat-square&logo=python&logoColor=white)
 
 ![Grove St PATH: se llena por la mañana y se vacía por la tarde](docs/img/grove_st_perfil.png)
 
-## En resumen
+## Qué es
 
 - **Problema:** un sistema de bici compartida tiene que saber cuánta demanda habrá, qué la frena y, sobre todo, **dónde se acumulan las bicis y dónde faltan**: el reparto con camiones es su mayor coste operativo. Para responderlo hace falta primero un modelo de datos limpio, probado y documentado, que es el objetivo de este proyecto.
 - **Datos:** 12 meses (octubre de 2025 a septiembre de 2026) de [viajes de Citi Bike en Jersey City y Hoboken](https://citibikenyc.com/system-data), 12 CSV mensuales, más la meteorología diaria de [Open-Meteo](https://open-meteo.com/).
 - **dbt:** 15 modelos en cuatro capas (staging → intermediate → core → analytics), un hecho **incremental** con **contrato de datos**, **85 tests** (83 de datos y 2 de cuadre entre capas) y **2 unit tests** (reglas de exclusión y cambio de hora). Además, macros propias, 3 *seeds*, variables de proyecto, *exposures*, todas las columnas de los marts documentadas y documentación publicada en GitHub Pages en cada push.
-- **Resultado:** unas pocas estaciones, casi todas junto al tren, acumulan **~210 bicis cada mañana laborable** y las devuelven por la tarde. Grove St PATH gana en la punta **1,5 veces sus anclajes**. La lluvia fuerte resta **un 35 %** de los viajes, la nieve **un 55 %**, y los días secos tras una nevada siguen **un 45 %** por debajo. El 99,4 % de las filas de origen son válidas, y cada fila descartada tiene su motivo registrado.
+- **Resultado:** unas pocas estaciones, casi todas junto al tren, acumulan **~210 bicis cada mañana laborable** y las devuelven por la tarde. Grove St PATH gana en la punta **1,5 veces sus anclajes**. Frente a un día seco comparable, un día de lluvia fuerte tiene **un 35 %** menos viajes, uno de nieve **un 55 %** menos, y los días secos tras una nevada siguen **un 45 %** por debajo. El 99,4 % de las filas de origen son válidas, y cada fila descartada tiene su motivo registrado.
 
 ## Hallazgos
 
 | # | Pregunta | Respuesta corta | Modelo |
 |---|---|---|---|
 | 1 | ¿Cuándo se usa la bici? | Los laborables tienen dos picos de trabajo: **8:00 (228 viajes/h)** y **17:00 (312 viajes/h)**. El fin de semana no hay picos: una meseta de ocio de 11 a 18 h. Un laborable medio tiene 2.814 viajes y un día de fin de semana, 2.323. | [`fct_trips`](models/marts/core/fct_trips.sql) + [`dim_date`](models/marts/core/dim_date.sql) |
-| 2 | ¿Dónde se acumulan las bicis? | El balance del día engaña: casi todas las estaciones parecen "equilibradas" porque lo que entra por la mañana sale por la tarde. Por horas, **Grove St PATH gana 61 bicis de 6 a 10 h y pierde 54 de 16 a 20 h**. Tiene 42 anclajes, así que **no le caben aunque empiece vacía** (1,46 bicis por anclaje). Lo mismo, a menor escala, en otras estaciones junto a Hoboken Terminal, Exchange Pl o Bergen Ave. Contado día a día, suman **~210 bicis** cada mañana laborable (mediana: 226). | [`mart_station_rebalancing`](models/marts/analytics/mart_station_rebalancing.sql) + [`mart_weekday_peak_load`](models/marts/analytics/mart_weekday_peak_load.sql) |
+| 2 | ¿Dónde se acumulan las bicis? | El balance del día engaña: casi todas las estaciones parecen "equilibradas" porque lo que entra por la mañana sale por la tarde. Por horas, **Grove St PATH gana 61 bicis de 6 a 10 h y pierde 54 de 16 a 20 h**. Gana más bicis que anclajes tiene (61 frente a 42, 1,46 por anclaje): **hay que retirar bicis durante la propia punta**. Lo mismo, a menor escala, en otras estaciones junto a Hoboken Terminal, Exchange Pl o Bergen Ave. Contado día a día, suman **~210 bicis** cada mañana laborable (mediana: 226). | [`mart_station_rebalancing`](models/marts/analytics/mart_station_rebalancing.sql) + [`mart_weekday_peak_load`](models/marts/analytics/mart_weekday_peak_load.sql) |
 | 3 | ¿Cuánto frena la meteorología? | Frente a un día seco del mismo mes y tipo de día: lluvia ligera **−8 %**, lluvia fuerte (≥ 10 mm) **−35 %** y nieve (≥ 1 cm) **−55 %** (IC 95 %: de −73 % a −37 %, 12 días). El efecto no acaba cuando deja de nevar: los 3 días secos tras una nevada fuerte siguen un **−45 %**. El 23 de febrero de 2026, con 14 cm de nieve, no se registró **ni un viaje**. | [`mart_weather_impact`](models/marts/analytics/mart_weather_impact.sql) |
 | 4 | ¿Cuánto pesa la estacionalidad? | De **907 viajes/día en febrero a 3.578 en verano**: casi 4 veces más. | [`mart_daily_demand`](models/marts/analytics/mart_daily_demand.sql) |
 | 5 | ¿Quién usa el sistema? | El **77 %** de los viajes son de abonados, con viajes cortos y de rutina (mediana de 5,7 min). Los ocasionales hacen viajes más largos (8,1 min) y pasan del 20 % de los viajes en laborable al **32 % en fin de semana**. El **64 %** de los viajes son en bici eléctrica. | [`fct_trips`](models/marts/core/fct_trips.sql) |
@@ -32,7 +32,7 @@
 ## Recomendaciones de negocio
 
 1. **Planificar el reparto por horas, no por días.** Un informe diario diría que el sistema está equilibrado. El camión tiene que vaciar Grove St PATH, las de Hoboken Terminal y Bergen Ave & Sip Ave **antes de las 9:00** y volver a llenarlas **antes de las 16:00**: unas 210 bicis cada laborable.
-2. **Ampliar los anclajes de Grove St PATH antes que mover más bicis.** Gana 61 bicis en la punta y tiene 42 anclajes: aunque el camión la deje vacía a las 6:00, se llena antes de las 10:00. Ninguna otra estación pasa de 0,7 bicis por anclaje. Una estación llena a las 8:30 deja sin sitio a quien viene a coger el tren y se pierde ese cliente.
+2. **Ampliar los anclajes de Grove St PATH antes que mover más bicis.** Gana 61 bicis en la punta y tiene 42 anclajes: aunque el camión la deje vacía a las 6:00, hay que volver a retirar bicis antes de las 10:00. Ninguna otra estación pasa de 0,7 bicis por anclaje. Una estación llena a las 8:30 deja sin sitio a quien viene a coger el tren y se pierde ese cliente.
 3. **Usar la previsión del tiempo para dimensionar la plantilla.** Un día de lluvia fuerte tiene un tercio menos de viajes y uno de nieve, la mitad: menos reparto y buen momento para el mantenimiento. Tras una nevada fuerte, la demanda sigue un 45 % por debajo durante 3 días: limpiar primero los accesos a las estaciones de tren puede adelantar la recuperación.
 4. **Convertir a los ocasionales del fin de semana en abonados.** Hacen viajes más largos, sobre todo en eléctrica, y el fin de semana pasan del 20 % al 32 % de los viajes. Una oferta de primer mes de abono tras su segundo viaje de fin de semana es el embudo natural.
 
@@ -107,7 +107,7 @@ flowchart LR
 - **Filtrar por fecha, no por fichero.** El fichero de octubre trae 16 viajes de septiembre. El periodo se define con variables del proyecto (`periodo_inicio`, `periodo_fin`).
 - **Leer todo como texto y fijar los tipos en staging.** Los id de estación de Nueva York son numéricos (`5329.03`) y los de Jersey City no (`JC115`). Si se deja que DuckDB detecte los tipos, un mes podría leerse distinto que otro.
 - **El calendario no sale de los viajes.** `dim_date` se genera con una serie de fechas. Si saliera de los viajes, el 23 de febrero (0 viajes por el temporal) simplemente no existiría y la media de febrero saldría inflada.
-- **Comparar la lluvia con días comparables.** Llueve y nieva más en invierno, cuando ya se usa menos la bici. Cada día se compara con los días secos del **mismo mes y tipo de día**. Comparando todos los días a la vez, la nieve parecería restar el 79 % en lugar del 55 %.
+- **Comparar la lluvia con días comparables.** Llueve y nieva más en invierno, cuando ya se usa menos la bici. Cada día se compara con los días secos del **mismo mes y tipo de día**. Comparando todos los días a la vez, la nieve parecería asociarse a un 79 % menos de viajes en lugar de un 55 %.
 - **Las medias por estación, sobre los días que existía.** Hudson Pl & Hoboken Terminal abrió el 31 de julio. Dividiendo entre el año entero (250 laborables en lugar de 43), su desequilibrio saldría casi 6 veces más pequeño.
 - **Nombres de estación cambiantes.** JC118 aparece con dos nombres ("Pacific Ave & Communipaw Ave" y al revés). `dim_stations` usa el más reciente y guarda cuántos ha tenido.
 - **El cambio de hora.** Citi Bike publica la hora local sin zona horaria. Al restar tal cual, 7 viajes de la noche del 2 de noviembre salían con duración negativa (de 01:57 a 01:03, porque esa noche la 1:00 se repite) y los de la noche del adelanto de marzo salían con 1 h de más. La macro [`duration_seconds`](macros/duration_seconds.sql) resta en UTC y corrige la hora repetida.
@@ -141,6 +141,7 @@ La capacidad de las estaciones es un seed versionado (foto del feed GBFS del 16/
 
 ## Limitaciones
 
+- El efecto de la meteorología es una asociación, no un efecto causal: se controlan el mes y el tipo de día, pero no la temperatura ni los eventos de cada día.
 - El sistema ya reparte bicis con camiones, y esos movimientos no aparecen en los datos. Las llegadas y salidas miden la demanda de los usuarios, no el número real de bicis en cada estación.
 - La distancia es en línea recta entre estaciones, no la ruta recorrida.
 - El 0,5 % de los viajes no tiene estación de destino. El 99,5 % de ellos son en bici eléctrica, que se puede dejar fuera de un anclaje. Se excluyen, y el informe de calidad los cuenta.
@@ -155,4 +156,4 @@ Analytics-engineering project built with dbt Core and DuckDB on 972k real Citi B
 
 ---
 
-Datos: [Citi Bike System Data](https://citibikenyc.com/system-data) y [feed GBFS](https://gbfs.citibikenyc.com/gbfs/gbfs.json) (Lyft Bikes and Scooters, [Data License Agreement](https://citibikenyc.com/data-sharing-policy)) y [Open-Meteo Historical Weather API](https://open-meteo.com/) (CC BY 4.0). Los CSV no se incluyen en el repositorio; `descargar_datos.py` los descarga.
+Datos: [Citi Bike System Data](https://citibikenyc.com/system-data) y [feed GBFS](https://gbfs.citibikenyc.com/gbfs/gbfs.json) (Lyft Bikes and Scooters, [Data License Agreement](https://citibikenyc.com/data-sharing-policy)) y [Open-Meteo Historical Weather API](https://open-meteo.com/) (CC BY 4.0). Los CSV no se incluyen en el repositorio; `descargar_datos.py` los descarga. El código se publica con licencia [MIT](LICENSE).

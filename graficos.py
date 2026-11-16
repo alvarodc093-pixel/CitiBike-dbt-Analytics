@@ -16,7 +16,7 @@ RAIZ = Path(__file__).parent
 DB = RAIZ / "data" / "citibike.duckdb"
 IMG = RAIZ / "docs" / "img"
 
-# Paleta categórica validada (contraste y daltonismo): azul y naranja como dos polos.
+# Azul y naranja: distinguibles con daltonismo y en escala de grises.
 AZUL = "#2a78d6"
 NARANJA = "#eb6834"
 GRIS = "#9ca3af"
@@ -86,10 +86,16 @@ def demanda_horaria(con) -> None:
 
 
 def perfil_grove(con) -> None:
+    # La estación que más bicis gana en la punta (hoy Grove St PATH), no un id fijo.
     df = sql(con, """
-        select hour, avg_net_flow from analytics.mart_station_hourly_profile
-        where station_id = 'JC115' and day_group = 'laborable' order by hour
+        select p.hour, p.avg_net_flow, p.station_name
+        from analytics.mart_station_hourly_profile as p
+        where p.day_group = 'laborable'
+          and p.station_id = (select station_id from analytics.mart_station_rebalancing
+                              order by am_peak_net_flow desc limit 1)
+        order by p.hour
     """)
+    nombre = df.station_name.iloc[0]
     fig, ax = plt.subplots(figsize=(10, 4.2))
     colores = [AZUL if v >= 0 else NARANJA for v in df.avg_net_flow]
     ax.bar(df.hour, df.avg_net_flow, color=colores, width=0.8)
@@ -98,11 +104,12 @@ def perfil_grove(con) -> None:
     ax.set_ylabel("Llegadas - salidas (bicis/h)")
     am = df[df.hour.between(6, 9)].avg_net_flow.sum()
     pm = df[df.hour.between(16, 19)].avg_net_flow.sum()
-    ax.text(9.8, df.avg_net_flow.max() * 0.85, f"+{am:.0f} bicis entre 6 y 10 h", ha="left",
-            va="center", color=TINTA)
-    ax.text(19.8, df.avg_net_flow.min() * 0.85, f"{pm:.0f} bicis entre 16 y 20 h", ha="left",
-            va="center", color=TINTA)
-    ax.set_title("Grove St PATH en un laborable: se llena por la mañana y se vacía por la tarde")
+    # Cada texto, a la derecha de su tramo horario y a la altura de su barra más larga.
+    ax.text(9.8, df.avg_net_flow.max() * 0.85, f"+{am:.0f} bicis entre 6 y 10 h",
+            ha="left", va="center", color=TINTA)
+    ax.text(19.8, df.avg_net_flow.min() * 0.85, f"{pm:.0f} bicis entre 16 y 20 h",
+            ha="left", va="center", color=TINTA)
+    ax.set_title(f"{nombre} en un laborable: se llena por la mañana y se vacía por la tarde")
     guardar(fig, "grove_st_perfil.png")
 
 
@@ -112,9 +119,11 @@ def estaciones_punta(con) -> None:
     df = sql(con, """
         with r as (
             select r.am_peak_net_flow,
-                   r.station_name || case when s.last_seen_date < (select max(date_day) - 7 from core.dim_date)
-                                          then ' (hasta ' || strftime(s.last_seen_date, '%d/%m') || ')'
-                                          else '' end as station_name
+                   r.station_name || case
+                       when s.last_seen_date < (select max(date_day) - 7 from core.dim_date)
+                       then ' (hasta ' || strftime(s.last_seen_date, '%d/%m') || ')'
+                       else ''
+                   end as station_name
             from analytics.mart_station_rebalancing as r
             join core.dim_stations as s using (station_id)
         )
@@ -150,7 +159,7 @@ def demanda_diaria(con) -> None:
     cero = df[df.trips == 0]
     for _, r in cero.iterrows():
         ax.annotate(f"{r.date_day:%d/%m}: temporal de nieve (14 cm),\nni un viaje registrado",
-                    (r.date_day, 0), xytext=(r.date_day + pd.Timedelta(days=35), 450),
+                    (r.date_day, 0), xytext=(r.date_day + pd.Timedelta(days=35), df.trips.max() * 0.09),
                     color=TINTA, arrowprops={"arrowstyle": "->", "color": TINTA})
     ax.set_ylabel("Viajes por día")
     ax.set_ylim(0)
@@ -171,7 +180,7 @@ def efecto_meteo(con) -> None:
     ax.bar(df.index, media, color=NARANJA, width=0.55)
     ax.errorbar(df.index, media, yerr=err, fmt="none", ecolor=TINTA, elinewidth=1, capsize=4)
     ax.axhline(0, color=TINTA, lw=0.8)
-    for x, (v, lo, n) in enumerate(zip(df.avg_pct_vs_dry, df.ci95_low, df.n_days)):
+    for x, (v, lo, n) in enumerate(zip(df.avg_pct_vs_dry, df.ci95_low, df.n_days, strict=True)):
         ax.text(x, lo * 100 - 2, f"{v:+.0%}\n({n} días)", ha="center", va="top", color=TINTA)
     ax.set_ylabel("% frente a un día seco comparable")
     ax.set_ylim(df.ci95_low.min() * 100 - 18, 3)

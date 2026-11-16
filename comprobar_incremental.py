@@ -42,7 +42,9 @@ def main() -> int:
             f"select count(*) from (({INCREMENTAL} except all {FULL}) "
             f"union all ({FULL} except all {INCREMENTAL}))"
         ).fetchall()[0][0]
-        meses = con.sql("select count(distinct strftime(trip_date, '%Y-%m')) from core.fct_trips").fetchall()[0][0]
+        meses = con.sql(
+            "select count(distinct strftime(trip_date, '%Y-%m')) from core.fct_trips"
+        ).fetchall()[0][0]
     print(f"incremental: {n_inc:,} filas | completa: {n_full:,} filas | "
           f"meses: {meses} | diferencias: {diff}")
     # Si la carga incremental no hubiera añadido el último mes, las dos versiones

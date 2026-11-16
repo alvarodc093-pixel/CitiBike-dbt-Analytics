@@ -42,9 +42,9 @@ summary as (
         round(avg(net_flow), 2)                                         as avg_daily_net_flow,
         round(avg(net_flow) filter (where day_type = 'laborable'), 2)   as avg_net_flow_weekday,
         round(avg(abs(net_flow)), 2)                                    as avg_abs_net_flow,
-        round(avg(case when net_flow <= -{{ var('umbral_desequilibrio', 10) }} then 1 else 0 end), 4)
+        round(avg(case when net_flow <= -{{ var('umbral_desequilibrio') }} then 1 else 0 end), 4)
                                                                         as share_days_draining,
-        round(avg(case when net_flow >=  {{ var('umbral_desequilibrio', 10) }} then 1 else 0 end), 4)
+        round(avg(case when net_flow >=  {{ var('umbral_desequilibrio') }} then 1 else 0 end), 4)
                                                                         as share_days_filling,
         case
             when avg(net_flow) <= -3 then 'se vacía'
@@ -65,8 +65,8 @@ select
     -- empezando vacía le caben: hay que retirar bicis en plena punta.
     round(p.am_peak_net_flow / nullif(st.capacity, 0), 2)           as am_peak_vs_capacity,
     case
-        when p.am_peak_net_flow >=  {{ var('umbral_desequilibrio', 10) }} then 'se llena por la mañana'
-        when p.am_peak_net_flow <= -{{ var('umbral_desequilibrio', 10) }} then 'se vacía por la mañana'
+        when p.am_peak_net_flow >=  {{ var('umbral_desequilibrio') }} then 'se llena por la mañana'
+        when p.am_peak_net_flow <= -{{ var('umbral_desequilibrio') }} then 'se vacía por la mañana'
         else 'estable en punta'
     end                                                             as peak_profile
 from summary as s
